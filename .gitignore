@@ -174,10 +174,3 @@ logs/
 
 # Shell scripts (deployment/personal scripts)
 *.sh
-
-# ignore the main.py and config.py
-main.py
-config.py
-
-# ignore path.yaml
-config/path.yaml
