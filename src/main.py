@@ -4,20 +4,17 @@ import warnings
 # Set PyTorch MPS fallback BEFORE any PyTorch imports
 os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 
-import json
 import logging
-import time
 from typing import List, Optional, Tuple
 
-import numpy as np
 import pandas as pd
 from sb3_contrib.ppo_mask import MaskablePPO
 
+from config import *
 from data.calculator import StockDataCalculator
 from data.expression import *
 from models.linear_alpha_pool import LinearAlphaPool, MseAlphaPool
 from rl.callbacks import CustomCallback
-from rl.env.core import AlphaEnvCore
 from rl.env.wrapper import AlphaEnv
 from rl.policy import Decoder, LSTMSharedNet, TransformerSharedNet
 from utils import load_config, reseed_everything, setup_logger
@@ -43,7 +40,7 @@ def save_factors(
     pool: LinearAlphaPool,
     final_cal: StockDataCalculator,
     group: Group,
-    batch_size: int = 128,
+    batch_size: int = BATCH_SIZE,
     policy_model: str = "all",
 ):
 
@@ -87,9 +84,9 @@ def run_single_experiment(
     spans: TrainTestSpans,
     groupby: GroupBy,
     group: Group,
-    seed: int = 0,
-    pool_capacity: int = 10,
-    steps: int = 200_000,
+    seed: int = SEED,
+    pool_capacity: int = POOL_CAPACITY,
+    steps: int = STEPS,
 ):
 
     reseed_everything(seed)
@@ -146,7 +143,7 @@ def run_single_experiment(
         group=group,
     )
 
-    target = Dealy(close_, -7) / close_ - 1
+    target = Dealy(close_, -TARGET) / close_ - 1
 
     calculator_train = StockDataCalculator(data_train, target)
     calculator_valid = StockDataCalculator(data_valid, target)
@@ -164,53 +161,52 @@ def run_single_experiment(
             pool.force_load_exprs(exprs)
         return pool
 
-    for batch_size in [128]:
-        pool = build_pool([])
+    pool = build_pool([])
 
-        env = AlphaEnv(pool=pool, device=device, print_expr=True)
+    env = AlphaEnv(pool=pool, device=device, print_expr=True)
 
-        checkpoint_callback = CustomCallback(
-            save_path=save_folder,
-            verbose=1,
-            group=group,
-            valid_calculator=calculator_valid,
-            test_calculator=calculator_test,
-            policy="LSTM",
-        )
+    checkpoint_callback = CustomCallback(
+        save_path=save_folder,
+        verbose=1,
+        group=group,
+        valid_calculator=calculator_valid,
+        test_calculator=calculator_test,
+        policy="LSTM",
+    )
 
-        model = MaskablePPO(
-            "MlpPolicy",
-            env,
-            policy_kwargs=dict(
-                features_extractor_class=LSTMSharedNet,
-                features_extractor_kwargs=dict(
-                    n_layers=2,
-                    d_model=128,
-                    dropout=0.1,
-                    device=device,
-                ),
+    model = MaskablePPO(
+        "MlpPolicy",
+        env,
+        policy_kwargs=dict(
+            features_extractor_class=LSTMSharedNet,
+            features_extractor_kwargs=dict(
+                n_layers=N_LAYERS,
+                d_model=D_MODEL,
+                dropout=DROPOUT,
+                device=device,
             ),
-            gamma=1.0,
-            ent_coef=0.1,
-            batch_size=batch_size,
-            device=device,
-            verbose=1,
-        )
+        ),
+        gamma=GAMMA,
+        ent_coef=ENT_COEF,
+        batch_size=BATCH_SIZE,
+        device=device,
+        verbose=1,
+    )
 
-        model.learn(
-            total_timesteps=steps,
-            callback=checkpoint_callback,
-            tb_log_name=name_prefix,
-        )
+    model.learn(
+        total_timesteps=steps,
+        callback=checkpoint_callback,
+        tb_log_name=name_prefix,
+    )
 
-        save_factors(
-            data=data_train,
-            pool=pool,
-            final_cal=calculator_train,
-            group=groupby,
-            batch_size=model.batch_size,
-            policy_model="LSTM",
-        )
+    save_factors(
+        data=data_train,
+        pool=pool,
+        final_cal=calculator_train,
+        group=groupby,
+        batch_size=model.batch_size,
+        policy_model="LSTM",
+    )
 
 
 def main(
@@ -219,30 +215,23 @@ def main(
     spans: TrainTestSpans,
     groupby: GroupBy,
     group: Group,
-    random_seeds: Union[int, Tuple[int]] = (533,),
-    pool_capacity: int = 5,
-    steps: Optional[int] = 200_000,
+    pool_capacity: int = POOL_CAPACITY,
+    steps: Optional[int] = STEPS,
 ):
     """
-    :param random_seeds: Random seeds
     :param pool_capacity: Maximum size of the alpha pool
-    :param instruments: Stock subset name
     :param steps: Total iteration steps
     """
-    if isinstance(random_seeds, int):
-        random_seeds = (random_seeds,)
 
-    for seed in random_seeds:
-        run_single_experiment(
-            data_sources=data_sources,
-            alphas=alphas,
-            spans=spans,
-            groupby=groupby,
-            group=group,
-            seed=seed,
-            pool_capacity=pool_capacity,
-            steps=steps,
-        )
+    run_single_experiment(
+        data_sources=data_sources,
+        alphas=alphas,
+        spans=spans,
+        groupby=groupby,
+        group=group,
+        pool_capacity=pool_capacity,
+        steps=steps,
+    )
 
 
 if __name__ == "__main__":

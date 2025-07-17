@@ -2,8 +2,34 @@ from typing import Type
 
 from data.expression import *
 
+# ----------------------------
+# training related
+BATCH_SIZE = 128
+STEPS = 200_000
+POOL_CAPACITY = 5
+SEED = 10
+
+# ----------------------------
+# target
+TARGET = 5
+
+# ----------------------------
+# feature extraction model related
+N_LAYERS = 2
+D_MODEL = 32
+DROPOUT = 0.3
+
+# ----------------------------
+# policy model related
+GAMMA = 1.0
+ENT_COEF = 0.1
+
+# ----------------------------
+# token generation related
+
 MAX_EXPR_LENGTH = 15
 MAX_EPISODE_LENGTH = 256
+
 
 OPERATORS: List[Type[Operator]] = [
     # Unary
@@ -44,7 +70,7 @@ OPERATORS: List[Type[Operator]] = [
     # If_Else,
 ]
 
-DELTA_TIMES = [2, 5, 10, 20, 40]
+DELTA_TIMES = [3, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90]
 
 CONSTANTS = [
     -30.0,

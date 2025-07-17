@@ -1,16 +1,17 @@
 import math
-from itertools import count
-from typing import List, Optional, Tuple, Iterable, Dict, Any, Set
 from abc import ABCMeta, abstractmethod
+from itertools import count
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 import numpy as np
 import torch
 
-from .alpha_pool import AlphaPoolBase
 from data.calculator import AlphaCalculator, TensorAlphaCalculator
 from data.expression import Expression, OutOfDataRangeError
-from data.pool_update import PoolUpdate, AddRemoveAlphas
+from data.pool_update import AddRemoveAlphas, PoolUpdate
 from utils.correlation import batch_pearsonr
+
+from .alpha_pool import AlphaPoolBase
 
 
 class LinearAlphaPool(AlphaPoolBase, metaclass=ABCMeta):
