@@ -180,4 +180,4 @@ main.py
 config.py
 
 # ignore path.yaml
-path.yaml
+config/path.yaml
