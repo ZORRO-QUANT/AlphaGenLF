@@ -22,7 +22,7 @@ from utils.constants import *
 
 warnings.filterwarnings("ignore")
 
-path_general = Path(load_config("path.yaml")["general"])
+path_save = Path(load_config("path.yaml")["save_path"])
 
 # Create logs directory if it doesn't exist
 PROJECT_ROOT = Path(__file__).parents[1]  # Go up one level from src to project root
@@ -49,7 +49,7 @@ def save_factors(
     # todo: modify this path to change the folder of alphas
 
     path_factor = (
-        path_general
+        path_save
         / data.data_sources.kline.exchange.name
         / data.data_sources.kline.universe.name
         / "Alphas"
@@ -100,7 +100,7 @@ def run_single_experiment(
     )
 
     name_prefix = f"{groupby.name}_{pool_capacity}_{seed}"
-    save_folder = path_general / name_prefix
+    save_folder = path_save / name_prefix
 
     if not save_folder.exists():
         save_folder.mkdir(parents=True, exist_ok=True)
