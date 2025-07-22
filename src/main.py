@@ -99,8 +99,15 @@ def run_single_experiment(
         Total Iteration Steps: {steps}"""
     )
 
-    name_prefix = f"{groupby.name}_{pool_capacity}_{seed}"
-    save_folder = path_general / name_prefix
+    name_prefix = f"{group.name}_{pool_capacity}_{seed}"
+    save_folder = (
+        path_general
+        / data_sources.kline.exchange.name
+        / data_sources.kline.universe.name
+        / "Alphas"
+        / data_sources.kline.freq
+        / name_prefix
+    )
 
     if not save_folder.exists():
         save_folder.mkdir(parents=True, exist_ok=True)
@@ -169,6 +176,9 @@ def run_single_experiment(
         save_path=save_folder,
         verbose=1,
         group=group,
+        data=data_train,
+        pool=pool,
+        train_calculator=calculator_train,
         valid_calculator=calculator_valid,
         test_calculator=calculator_test,
         policy="LSTM",
@@ -259,7 +269,7 @@ if __name__ == "__main__":
     # ------------------------------------
     # state the group
     groupby = GroupBy.amount_quarter_spot_3
-    group = Group.ALL
+    group = Group.MIDDLE
 
     # ------------------------------------
     # state the train test split

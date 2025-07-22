@@ -8,6 +8,7 @@ import numpy as np
 from stable_baselines3.common.callbacks import BaseCallback
 
 from data.calculator import StockDataCalculator
+from data.stock_data import StockData
 from models.linear_alpha_pool import LinearAlphaPool
 from rl.env.core import AlphaEnvCore
 from utils.constants import Group
@@ -18,7 +19,10 @@ logger = logging.getLogger(__name__)
 class CustomCallback(BaseCallback):
     def __init__(
         self,
+        data: StockData,
+        pool: LinearAlphaPool,
         save_path: Path,
+        train_calculator: StockDataCalculator,
         valid_calculator: StockDataCalculator,
         test_calculator: StockDataCalculator,
         group: Group,
