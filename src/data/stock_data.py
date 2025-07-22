@@ -1,10 +1,12 @@
-from typing import List, Union, Optional, Tuple
-from enum import IntEnum
 import datetime
+from enum import IntEnum
+from pathlib import Path
+from typing import List, Optional, Tuple, Union
+
 import pandas as pd
 import polars as pl
 import torch
-from pathlib import Path
+
 from utils.constants import *
 from utils.utils import load_config
 
@@ -208,7 +210,7 @@ class StockData:
             df_group = self._read_group()
 
             df = df.join(df_group, on=["time", "symbol"], how="inner")
-            df = df.filter(pl.col("class") == self.group.name())
+            df = df.filter(pl.col("class") == self.group.name)
             df = df.drop("class")
 
         # Drop id column and convert to pandas for reshaping operations
@@ -221,7 +223,7 @@ class StockData:
         stock_ids = df_pandas.columns
         values = df_pandas.values
         values = values.reshape((-1, len(features), values.shape[-1]))  # type: ignore
-        
+
         return (
             torch.tensor(values, dtype=torch.float32, device=self.device),
             dates,
@@ -249,7 +251,6 @@ class StockData:
         )
 
         df_group = pl.scan_csv(path_group).collect()
-        df_group = df_group.rename({"class": "group"})
         df_group = df_group.drop("id")
         df_group = df_group.with_columns(
             pl.col("time")
@@ -259,22 +260,22 @@ class StockData:
 
         # rename the symbols, eventually all the symbols are in the format of `BTCUSDT`
         if (
-            self.data_sources.factor.exchange == Exchange.Okx
-            and self.data_sources.factor.universe == Universe.perp
+            self.data_sources.group.exchange == Exchange.Okx
+            and self.data_sources.group.universe == Universe.perp
         ):
             df_group = df_group.with_columns(
                 pl.col("symbol").map_elements(lambda x: "".join(x.split("-")[:2]))
             )
         elif (
-            self.data_sources.factor.exchange == Exchange.Okx
-            and self.data_sources.factor.universe == Universe.spot
+            self.data_sources.group.exchange == Exchange.Okx
+            and self.data_sources.group.universe == Universe.spot
         ):
             df_group = df_group.with_columns(
                 pl.col("symbol").map_elements(lambda x: x.replace("-", ""))
             )
         elif (
-            self.data_sources.factor.exchange == Exchange.Binance
-            and self.data_sources.factor.universe == Universe.perp
+            self.data_sources.group.exchange == Exchange.Binance
+            and self.data_sources.group.universe == Universe.perp
         ):
             df_group = df_group.with_columns(
                 pl.col("symbol").map_elements(
@@ -284,8 +285,8 @@ class StockData:
                 )
             )
         elif (
-            self.data_sources.factor.exchange == Exchange.Binance
-            and self.data_sources.factor.universe == Universe.spot
+            self.data_sources.group.exchange == Exchange.Binance
+            and self.data_sources.group.universe == Universe.spot
         ):
             df_group = df_group.with_columns(
                 pl.col("symbol").map_elements(

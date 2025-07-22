@@ -1,8 +1,9 @@
 import re
-from typing import Type, List, Dict, Set, Union, Optional, cast, overload, Literal
-from .expression import *
+from typing import Dict, List, Literal, Optional, Set, Type, Union, cast, overload
+
 from utils.misc import find_last_if
 
+from .expression import *
 
 _PATTERN = re.compile(r"([+-]?[\d.]+|\W|\w+)")
 _NUMERIC = re.compile(r"[+-]?[\d.]+")

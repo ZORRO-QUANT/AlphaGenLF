@@ -108,16 +108,50 @@ class Alpha:
 class TrainTestSpans:
     train_start: datetime.datetime
     train_end: datetime.datetime
-    valid_start: datetime.datetime
-    valid_end: datetime.datetime
-    test_start: datetime.datetime
-    test_end: datetime.datetime
+
+    valid_start: Optional[datetime.datetime] = None
+    valid_end: Optional[datetime.datetime] = None
+    test_start: Optional[datetime.datetime] = None
+    test_end: Optional[datetime.datetime] = None
 
     allow_overlap: bool = True
 
     def __post_init__(self):
-        # Validate no overlap if not allow_overlap
-
+        """Validate date ranges and overlaps."""
+        self._validate_date_order()
         if not self.allow_overlap:
-            assert self.train_end <= self.valid_start
-            assert self.valid_end <= self.test_start
+            self._validate_no_overlap()
+
+    def _validate_date_order(self) -> None:
+        """Ensure dates are in chronological order within each period."""
+        if self.train_start >= self.train_end:
+            raise ValueError("train_start must be before train_end")
+
+        if self.valid_start and self.valid_end and self.valid_start >= self.valid_end:
+            raise ValueError("valid_start must be before valid_end")
+
+        if self.test_start and self.test_end and self.test_start >= self.test_end:
+            raise ValueError("test_start must be before test_end")
+
+    def _validate_no_overlap(self) -> None:
+        """Ensure no overlap between periods when allow_overlap=False."""
+        if not all([self.valid_start, self.valid_end, self.test_start, self.test_end]):
+            raise ValueError(
+                "All date ranges must be specified when allow_overlap=False"
+            )
+
+        if self.train_end > self.valid_start:
+            raise ValueError("Training period overlaps with validation period")
+
+        if self.valid_end > self.test_start:
+            raise ValueError("Validation period overlaps with test period")
+
+    @property
+    def has_validation(self) -> bool:
+        """Check if validation period is defined."""
+        return self.valid_start is not None and self.valid_end is not None
+
+    @property
+    def has_test(self) -> bool:
+        """Check if test period is defined."""
+        return self.test_start is not None and self.test_end is not None

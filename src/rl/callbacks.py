@@ -5,9 +5,11 @@ import time
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 from stable_baselines3.common.callbacks import BaseCallback
 
 from data.calculator import StockDataCalculator
+from data.stock_data import StockData
 from models.linear_alpha_pool import LinearAlphaPool
 from rl.env.core import AlphaEnvCore
 from utils.constants import Group
@@ -18,21 +20,30 @@ logger = logging.getLogger(__name__)
 class CustomCallback(BaseCallback):
     def __init__(
         self,
+        data: StockData,
         save_path: Path,
-        valid_calculator: StockDataCalculator,
-        test_calculator: StockDataCalculator,
+        calculator_train: StockDataCalculator,
+        calculator_big: StockDataCalculator,
+        calculator_middle: StockDataCalculator,
+        calculator_small: StockDataCalculator,
+        calculator_total: StockDataCalculator,
         group: Group,
         policy: str = "LSTM",
         verbose: int = 0,
     ):
         super().__init__(verbose)
+
+        self.data = data
         self.save_path = save_path
 
         self.group = group
         self.policy = policy
 
-        self.valid_calculator = valid_calculator
-        self.test_calculator = test_calculator
+        self.calculator_train = calculator_train
+        self.calculator_big = calculator_big
+        self.calculator_middle = calculator_middle
+        self.calculator_small = calculator_small
+        self.calculator_total = calculator_total
 
         self.last_time = time.time()
         self.fisrt_time = time.time()
@@ -43,8 +54,9 @@ class CustomCallback(BaseCallback):
     def _on_rollout_end(self) -> None:
 
         assert self.logger is not None
-        ic_valid, rank_ic_valid = self.pool.test_ensemble(self.valid_calculator)
-        ic_test, rank_ic_test = self.pool.test_ensemble(self.test_calculator)
+        _, rank_ic_big = self.pool.test_ensemble(self.calculator_big)
+        _, rank_ic_middle = self.pool.test_ensemble(self.calculator_middle)
+        _, rank_ic_small = self.pool.test_ensemble(self.calculator_small)
 
         now = time.time()
         epoch_time = now - self.last_time
@@ -59,24 +71,35 @@ class CustomCallback(BaseCallback):
             "pool/significant",
             (np.abs(self.pool.weights[: self.pool.size]) > 1e-4).sum(),
         )
-        self.logger.record("pool/best_ic_ret", self.pool.best_ic_ret)
-        self.logger.record("pool/eval_cnt", self.pool.eval_cnt)
 
-        self.logger.record("valid/ic", ic_valid)
-        self.logger.record("valid/rank_ic", rank_ic_valid)
-        self.logger.record("test/ic", ic_test)
-        self.logger.record("test/rank_ic", rank_ic_test)
+        self.logger.record("big/rank_ic", rank_ic_big)
+        self.logger.record("middle/rank_ic", rank_ic_middle)
+        self.logger.record("small/rank_ic", rank_ic_small)
 
         self.show_pool_state()
         self.save_checkpoint()
 
     def save_checkpoint(self):
-        path = os.path.join(self.save_path, f"{self.num_timesteps}_steps")
-        self.model.save(path)  # type: ignore
-        if self.verbose > 1:
-            print(f"Saving model checkpoint to {path}")
-        with open(f"{path}_pool.json", "w") as f:
-            json.dump(self.pool.to_json_dict(), f)
+
+        q = self.data.max_backtrack_days
+        h = -self.data.max_future_days
+
+        dates, symbol = self.data._dates, self.data._stock_ids
+
+        for expre in self.pool.state["exprs"]:
+
+            data = self.calculator_total.evaluate_alpha(expre, standardize=False)
+
+            df_alpha = pd.DataFrame(data.cpu(), index=dates[q:h], columns=symbol)
+
+            df_alpha.reset_index(inplace=True)
+            df_alpha = df_alpha.melt(
+                id_vars="time", var_name="symbol", value_name=f"{expre}"
+            )
+            df_alpha.dropna(subset=f"{expre}", inplace=True)
+            df_alpha.to_csv(
+                self.save_path / f"{expre}.csv", index=False, encoding="utf-8-sig"
+            )
 
     def show_pool_state(self):
         state = self.pool.state

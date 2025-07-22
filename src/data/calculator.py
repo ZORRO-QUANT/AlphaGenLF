@@ -1,13 +1,13 @@
 from abc import ABCMeta, abstractmethod
-from typing import Tuple, Optional, Sequence
-from torch import Tensor
+from typing import Optional, Sequence, Tuple
+
 import torch
+from torch import Tensor
 
 from data.expression import Expression
-from utils.correlation import batch_pearsonr, batch_spearmanr
-
-from utils.pytorch_utils import normalize_by_day
 from data.stock_data import StockData
+from utils.correlation import batch_pearsonr, batch_spearmanr
+from utils.pytorch_utils import normalize_by_day
 
 
 class AlphaCalculator(metaclass=ABCMeta):
@@ -147,13 +147,14 @@ class TensorAlphaCalculator(AlphaCalculator):
 
 class StockDataCalculator(TensorAlphaCalculator):
     def __init__(self, data: StockData, target: Optional[Expression] = None):
-        super().__init__(
-            normalize_by_day(target.evaluate(data)) if target is not None else None
-        )
+        super().__init__(target.evaluate(data) if target is not None else None)
         self.data = data
 
-    def evaluate_alpha(self, expr: Expression) -> Tensor:
-        return normalize_by_day(expr.evaluate(self.data))
+    def evaluate_alpha(self, expr: Expression, standardize: bool = True) -> Tensor:
+        if standardize:
+            return normalize_by_day(expr.evaluate(self.data))
+        else:
+            return expr.evaluate(self.data)
 
     @property
     def n_days(self) -> int:

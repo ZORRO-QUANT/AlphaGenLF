@@ -1,4 +1,4 @@
-from typing import Type
+from typing import Literal, Type
 
 from data.expression import *
 
@@ -6,7 +6,7 @@ from data.expression import *
 # training related
 BATCH_SIZE = 128
 STEPS = 200_000
-POOL_CAPACITY = 5
+POOL_CAPACITY = 3
 SEED = 10
 
 # ----------------------------
@@ -22,13 +22,16 @@ DROPOUT = 0.3
 # ----------------------------
 # policy model related
 GAMMA = 1.0
-ENT_COEF = 0.1
+ENT_COEF = 0.05
 
 # ----------------------------
 # token generation related
-
-MAX_EXPR_LENGTH = 15
+MAX_EXPR_LENGTH = 30
 MAX_EPISODE_LENGTH = 256
+
+# ----------------------------
+# set the policy
+POLICY: Literal["LSTM", "TRANSFORMER"] = "LSTM"
 
 
 OPERATORS: List[Type[Operator]] = [
@@ -51,7 +54,7 @@ OPERATORS: List[Type[Operator]] = [
     Min,
     Med,
     Mad,
-    Rank,
+    TSRank,
     Delta,
     Wma,
     Ema,
