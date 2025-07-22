@@ -1,10 +1,11 @@
 from abc import ABCMeta, abstractmethod
-from typing import List, Type, Union, Tuple
+from typing import List, Tuple, Type, Union
 
 import torch
 from torch import Tensor
-from utils.maybe import Maybe, some, none
-from data.stock_data import StockData, Features
+
+from data.stock_data import Features, StockData
+from utils.maybe import Maybe, none, some
 
 _ExprOrFloat = Union["Expression", float]
 _DTimeOrInt = Union["DeltaTime", int]
@@ -707,13 +708,17 @@ class Mad(RollingOperator):
         return central.abs().mean(dim=-1)
 
 
-class Rank(RollingOperator):
+class TSRank(RollingOperator):
     def _apply(self, operand: Tensor) -> Tensor:
         n = operand.shape[-1]
         last = operand[:, :, -1, None]
+
         left = (last < operand).count_nonzero(dim=-1)
         right = (last <= operand).count_nonzero(dim=-1)
         result = (right + left + (right > left)) / (2 * n)
+
+        result[result == 0] = torch.nan
+
         return result
 
 
@@ -770,20 +775,44 @@ class Argmax(RollingOperator):
     def _apply(self, operand: Tensor) -> Tensor:
         # operand: shape [..., window]
         # 返回最大值出现的相对天数（0表示最后一天，d-1表示最早）
+
+        # Handle all-NaN cases safely
+        all_nan_mask = operand.isnan().all(dim=-1)
+
+        # For non-NaN cases, find argmax
         argmax_idx = operand.argmax(dim=-1)  # shape: [...]
+
+        # For all-NaN cases, set to NaN (or a sentinel value)
+        argmax_idx = argmax_idx.float()
+        argmax_idx[all_nan_mask] = float("nan")
+
         # 反向计数：0表示今天，d-1表示最早
         n = operand.shape[-1]
-        return n - 1 - argmax_idx.float()
+        result = n - 1 - argmax_idx
+
+        return result
 
 
 class Argmin(RollingOperator):
     def _apply(self, operand: Tensor) -> Tensor:
         # operand: shape [..., window]
-        # 返回最大值出现的相对天数（0表示最后一天，d-1表示最早）
+        # 返回最小值出现的相对天数（0表示最后一天，d-1表示最早）
+
+        # Handle all-NaN cases safely
+        all_nan_mask = operand.isnan().all(dim=-1)
+
+        # For non-NaN cases, find argmin
         argmin_idx = operand.argmin(dim=-1)  # shape: [...]
+
+        # For all-NaN cases, set to NaN (or a sentinel value)
+        argmin_idx = argmin_idx.float()
+        argmin_idx[all_nan_mask] = float("nan")
+
         # 反向计数：0表示今天，d-1表示最早
         n = operand.shape[-1]
-        return n - 1 - argmin_idx.float()
+        result = n - 1 - argmin_idx
+
+        return result
 
 
 class Product(RollingOperator):
@@ -938,7 +967,7 @@ Operators: List[Type[Operator]] = [
     Min,
     Med,
     Mad,
-    Rank,
+    TSRank,
     Delta,
     Wma,
     Ema,

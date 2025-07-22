@@ -34,48 +34,7 @@ logger = setup_logger("root", log_file=log_file)
 
 logger = logging.getLogger(__name__)
 
-
-def save_factors(
-    data: StockData,
-    pool: LinearAlphaPool,
-    final_cal: StockDataCalculator,
-    group: Group,
-    batch_size: int = BATCH_SIZE,
-    policy_model: str = "all",
-):
-
-    experiment_folder = f"group_{group.name}_batch_{batch_size}_policy_{policy_model}"
-
-    # todo: modify this path to change the folder of alphas
-
-    path_factor = (
-        path_general
-        / data.data_sources.kline.exchange.name
-        / data.data_sources.kline.universe.name
-        / "Alphas"
-        / data.data_sources.kline.freq
-        / experiment_folder
-    )
-
-    if not path_factor.exists():
-        path_factor.mkdir(exist_ok=True, parents=True)
-
-    dates, symbol = data._dates, data._stock_ids
-
-    q = data.max_backtrack_days
-    h = -data.max_future_days
-    for expre in pool.state["exprs"]:
-
-        data = final_cal.evaluate_alpha(expre)
-
-        df_alpha = pd.DataFrame(data.cpu(), index=dates[q:h], columns=symbol)
-
-        df_reset = df_alpha.reset_index()
-        df_long = df_reset.melt(
-            id_vars="time", var_name="symbol", value_name=f"{expre}"
-        )
-        df_long.dropna(subset=f"{expre}", inplace=True)
-        df_long.to_csv(f"{path_factor}/{expre}.csv", index=False, encoding="utf-8-sig")
+policy_dict = {"LSTM": LSTMSharedNet, "TRANSFORMER": TransformerSharedNet}
 
 
 def run_single_experiment(
@@ -99,14 +58,15 @@ def run_single_experiment(
         Total Iteration Steps: {steps}"""
     )
 
-    name_prefix = f"{group.name}_{pool_capacity}_{seed}"
+    folder_name = f"group-{group.name}_pool-{pool_capacity}_seed-{seed}_policy-{POLICY}_target-{TARGET}"
+
     save_folder = (
         path_general
         / data_sources.kline.exchange.name
         / data_sources.kline.universe.name
         / "Alphas"
         / data_sources.kline.freq
-        / name_prefix
+        / folder_name
     )
 
     if not save_folder.exists():
@@ -120,6 +80,12 @@ def run_single_experiment(
 
     close_ = Feature(Features.CLOSE)
 
+    # ---------------------------------------
+    # set the train / big / middle / small / total datasets
+    # train dataset for training
+    # big / middle / small datasets for ic printing
+    # total dataset for computing the full history alpha and save
+
     data_train = StockData(
         start_time=spans.train_start,
         end_time=spans.train_end,
@@ -130,31 +96,53 @@ def run_single_experiment(
         group=group,
     )
 
-    data_valid = StockData(
-        start_time=spans.valid_start,
-        end_time=spans.valid_end,
+    data_big = StockData(
+        start_time=spans.train_start,
+        end_time=spans.train_end,
         data_sources=data_sources,
         alphas=alphas,
         device=device,
         groupby=groupby,
-        group=group,
+        group=Group.BIG,
     )
 
-    data_test = StockData(
-        start_time=spans.test_start,
-        end_time=spans.test_end,
+    data_middle = StockData(
+        start_time=spans.train_start,
+        end_time=spans.train_end,
         data_sources=data_sources,
         alphas=alphas,
         device=device,
         groupby=groupby,
-        group=group,
+        group=Group.MIDDLE,
+    )
+
+    data_small = StockData(
+        start_time=spans.train_start,
+        end_time=spans.train_end,
+        data_sources=data_sources,
+        alphas=alphas,
+        device=device,
+        groupby=groupby,
+        group=Group.SMALL,
+    )
+
+    data_total = StockData(
+        start_time=datetime.datetime(2017, 8, 17, 8, 0, 0),
+        end_time=datetime.date.today(),
+        data_sources=data_sources,
+        alphas=alphas,
+        device=device,
+        groupby=groupby,
+        group=Group.ALL,
     )
 
     target = Dealy(close_, -TARGET) / close_ - 1
 
     calculator_train = StockDataCalculator(data_train, target)
-    calculator_valid = StockDataCalculator(data_valid, target)
-    calculator_test = StockDataCalculator(data_test, target)
+    calculator_big = StockDataCalculator(data_big, target)
+    calculator_middle = StockDataCalculator(data_middle, target)
+    calculator_small = StockDataCalculator(data_small, target)
+    calculator_total = StockDataCalculator(data_total, target)
 
     def build_pool(exprs: List[Expression]) -> LinearAlphaPool:
         pool = MseAlphaPool(
@@ -174,21 +162,21 @@ def run_single_experiment(
 
     checkpoint_callback = CustomCallback(
         save_path=save_folder,
-        verbose=1,
         group=group,
-        data=data_train,
-        pool=pool,
-        train_calculator=calculator_train,
-        valid_calculator=calculator_valid,
-        test_calculator=calculator_test,
-        policy="LSTM",
+        data=data_total,
+        calculator_train=calculator_train,
+        calculator_big=calculator_big,
+        calculator_middle=calculator_middle,
+        calculator_small=calculator_small,
+        calculator_total=calculator_total,
+        policy=POLICY,
     )
 
     model = MaskablePPO(
         "MlpPolicy",
         env,
         policy_kwargs=dict(
-            features_extractor_class=LSTMSharedNet,
+            features_extractor_class=policy_dict[POLICY],
             features_extractor_kwargs=dict(
                 n_layers=N_LAYERS,
                 d_model=D_MODEL,
@@ -206,16 +194,7 @@ def run_single_experiment(
     model.learn(
         total_timesteps=steps,
         callback=checkpoint_callback,
-        tb_log_name=name_prefix,
-    )
-
-    save_factors(
-        data=data_train,
-        pool=pool,
-        final_cal=calculator_train,
-        group=groupby,
-        batch_size=model.batch_size,
-        policy_model="LSTM",
+        tb_log_name=folder_name,
     )
 
 
@@ -276,10 +255,6 @@ if __name__ == "__main__":
     spans = TrainTestSpans(
         train_start=datetime.datetime(2021, 1, 1, 8, 0, 0),
         train_end=datetime.datetime(2025, 6, 1, 8, 0, 0),
-        valid_start=datetime.datetime(2024, 1, 1, 8, 0, 0),
-        valid_end=datetime.datetime(2024, 12, 31, 8, 0, 0),
-        test_start=datetime.datetime(2025, 4, 1, 8, 0, 0),
-        test_end=datetime.datetime(2025, 6, 1, 8, 0, 0),
     )
 
     main(
