@@ -22,7 +22,7 @@ from utils.constants import *
 
 warnings.filterwarnings("ignore")
 
-path_general = Path(load_config("path.yaml")["general"])
+path_save = Path(load_config("path.yaml")["save_path"])
 
 # Create logs directory if it doesn't exist
 PROJECT_ROOT = Path(__file__).parents[1]  # Go up one level from src to project root
@@ -34,6 +34,48 @@ logger = setup_logger("root", log_file=log_file)
 
 logger = logging.getLogger(__name__)
 
+
+def save_factors(
+    data: StockData,
+    pool: LinearAlphaPool,
+    final_cal: StockDataCalculator,
+    group: Group,
+    batch_size: int = BATCH_SIZE,
+    policy_model: str = "all",
+):
+
+    experiment_folder = f"group_{group.name}_batch_{batch_size}_policy_{policy_model}"
+
+    # todo: modify this path to change the folder of alphas
+
+    path_factor = (
+        path_save
+        / data.data_sources.kline.exchange.name
+        / data.data_sources.kline.universe.name
+        / "Alphas"
+        / data.data_sources.kline.freq
+        / experiment_folder
+    )
+
+    if not path_factor.exists():
+        path_factor.mkdir(exist_ok=True, parents=True)
+
+    dates, symbol = data._dates, data._stock_ids
+
+    q = data.max_backtrack_days
+    h = -data.max_future_days
+    for expre in pool.state["exprs"]:
+
+        data = final_cal.evaluate_alpha(expre)
+
+        df_alpha = pd.DataFrame(data.cpu(), index=dates[q:h], columns=symbol)
+
+        df_reset = df_alpha.reset_index()
+        df_long = df_reset.melt(
+            id_vars="time", var_name="symbol", value_name=f"{expre}"
+        )
+        df_long.dropna(subset=f"{expre}", inplace=True)
+        df_long.to_csv(f"{path_factor}/{expre}.csv", index=False, encoding="utf-8-sig")
 policy_dict = {"LSTM": LSTMSharedNet, "TRANSFORMER": TransformerSharedNet}
 
 
@@ -61,7 +103,7 @@ def run_single_experiment(
     folder_name = f"group-{group.name}_pool-{pool_capacity}_seed-{seed}_policy-{POLICY}_target-{TARGET}"
 
     save_folder = (
-        path_general
+        path_save
         / data_sources.kline.exchange.name
         / data_sources.kline.universe.name
         / "Alphas"

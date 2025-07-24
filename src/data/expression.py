@@ -247,6 +247,7 @@ class UnaryOperator(Operator):
         )
 
     def evaluate(self, data: StockData, period: slice = slice(0, 1)) -> Tensor:
+        torch.cuda.empty_cache()
         return self._apply(self._operand.evaluate(data, period))
 
     @abstractmethod
@@ -281,6 +282,7 @@ class BinaryOperator(Operator):
         )
 
     def evaluate(self, data: StockData, period: slice = slice(0, 1)) -> Tensor:
+        torch.cuda.empty_cache()
         return self._apply(
             self._lhs.evaluate(data, period), self._rhs.evaluate(data, period)
         )
@@ -413,10 +415,23 @@ class RollingOperator(Operator):
         # L: period length (requested time window length)
         # W: window length (dt for rolling)
         # S: stock count
-        values = self._operand.evaluate(data, slice(start, stop))  # (L+W-1, S)
-        values = values.unfold(0, self._delta_time, 1)
+        values = self._operand.evaluate(data, slice(start, stop))   # (L+W-1, S)
+        value_device = data.device
+        del data
+        # unfold生成的是视图，
+        try:
+            values = values.unfold(0, self._delta_time, 1).clone()
+        except RuntimeError:
+            values = values.to('cpu').unfold(0, self._delta_time, 1)
+            # print("不能放到cuda继续用cpu")
         # print(values.shape)           # (L, S, W)
-        return self._apply(values)  # (L, S)
+        return self._apply(values).to(value_device)   
+
+        # values = self._operand.evaluate(data, slice(start, stop))  # (L+W-1, S)
+        # values = values.unfold(0, self._delta_time, 1)
+        # # print(values.shape)           # (L, S, W)
+        # torch.cuda.empty_cache()
+        # return self._apply(values)  # (L, S)
 
     @abstractmethod
     def _apply(self, operand: Tensor) -> Tensor: ...
@@ -454,21 +469,37 @@ class PairRollingOperator(Operator):
             .or_else(lambda: cls._check_delta_time(args[2]))
         )
 
-    def _unfold_one(
-        self, expr: Expression, data: StockData, period: slice = slice(0, 1)
-    ) -> Tensor:
+    def _unfold_one(self, expr: Expression,
+                    data: StockData, period: slice = slice(0, 1),
+                    left: bool = True,
+                    left_device: torch.device = torch.device('cpu')) -> Tensor:
+        # left 是否是lhs
         start = period.start - self._delta_time + 1
         stop = period.stop
         # L: period length (requested time window length)
         # W: window length (dt for rolling)
         # S: stock count
-        values = expr.evaluate(data, slice(start, stop))  # (L+W-1, S)
-        return values.unfold(0, self._delta_time, 1)  # (L, S, W)
+        values = expr.evaluate(data, slice(start, stop)).clone()
+        if left:
+            try:
+                res = values.unfold(0, self._delta_time, 1).clone()
+            except RuntimeError:
+                res = values.to('cpu').unfold(0, self._delta_time, 1).clone()  
+        else:
+            res = values.to(left_device).unfold(0, self._delta_time, 1).clone()
+        del values
+        torch.cuda.empty_cache()
+        return res     # (L, S, W)
 
     def evaluate(self, data: StockData, period: slice = slice(0, 1)) -> Tensor:
         lhs = self._unfold_one(self._lhs, data, period)
-        rhs = self._unfold_one(self._rhs, data, period)
-        return self._apply(lhs, rhs)  # (L, S)
+        rhs = self._unfold_one(self._rhs, data, period, False, lhs.device)
+        result = self._apply(lhs, rhs)
+        result = result.to(data.device)
+        del lhs, rhs
+        gc.collect()
+        torch.cuda.empty_cache()
+        return result                # (L, S)
 
     @abstractmethod
     def _apply(self, lhs: Tensor, rhs: Tensor) -> Tensor: ...
