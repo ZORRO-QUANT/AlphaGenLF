@@ -58,7 +58,7 @@ def run_single_experiment(
         Total Iteration Steps: {steps}"""
     )
 
-    folder_name = f"group-{group.name}_pool-{pool_capacity}_seed-{seed}_policy-{POLICY}_target-{TARGET}"
+    folder_name = f"group_{group.name}_pool_{pool_capacity}_seed_{seed}_policy_{POLICY}_target_{TARGET}"
 
     save_folder = (
         path_general
@@ -236,12 +236,16 @@ if __name__ == "__main__":
     # state all the alpha categories we want to compute
     alphas = [
         Alpha(
-            category=Category.liquidity_1d,
-            alpha="liq_nonliquidity_10",
+            category=Category.volatility_hf_1d,
+            alpha="vol_ret_min",
         ),
         Alpha(
-            category=Category.pv_1d,
-            alpha="corr_retvd_30",
+            category=Category.imbalance_hf_1d,
+            alpha="imbalanceHF_disagreement_min",
+        ),
+        Alpha(
+            category=Category.pv_hf_1d,
+            alpha="corr_ptbv_min",
         ),
     ]
 
@@ -254,7 +258,7 @@ if __name__ == "__main__":
     # state the train test split
     spans = TrainTestSpans(
         train_start=datetime.datetime(2021, 1, 1, 8, 0, 0),
-        train_end=datetime.datetime(2025, 6, 1, 8, 0, 0),
+        train_end=datetime.datetime(2025, 2, 20, 8, 0, 0),
     )
 
     main(

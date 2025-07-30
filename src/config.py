@@ -6,8 +6,8 @@ from data.expression import *
 # training related
 BATCH_SIZE = 128
 STEPS = 200_000
-POOL_CAPACITY = 3
-SEED = 10
+POOL_CAPACITY = 10
+SEED = 44
 
 # ----------------------------
 # target
@@ -15,14 +15,14 @@ TARGET = 5
 
 # ----------------------------
 # feature extraction model related
-N_LAYERS = 2
+N_LAYERS = 3
 D_MODEL = 32
-DROPOUT = 0.3
+DROPOUT = 0.5
 
 # ----------------------------
 # policy model related
 GAMMA = 1.0
-ENT_COEF = 0.05
+ENT_COEF = 0.1
 
 # ----------------------------
 # token generation related
@@ -31,7 +31,7 @@ MAX_EPISODE_LENGTH = 256
 
 # ----------------------------
 # set the policy
-POLICY: Literal["LSTM", "TRANSFORMER"] = "LSTM"
+POLICY: Literal["LSTM", "TRANSFORMER"] = "TRANSFORMER"
 
 
 OPERATORS: List[Type[Operator]] = [

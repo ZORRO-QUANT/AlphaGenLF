@@ -32,3 +32,54 @@ def normalize_by_day(value: Tensor) -> Tensor:
     # nan_mask = torch.isnan(value)
     # value[nan_mask] = 0.
     return value
+
+
+def nanstd(tensor: torch.Tensor, dim: int, keepdim: bool = False):
+    """Compute the standard deviation manually while ignoring NaNs."""
+    # Mask NaN values
+    valid_mask = ~torch.isnan(tensor)
+    count = valid_mask.sum(dim=dim, keepdim=True).float()
+
+    # Compute the mean, while ignoring NaNs (ensure broadcasting along the correct dimension)
+    mean = torch.nansum(tensor, dim=dim, keepdim=True) / count.clamp(min=1)
+
+    # Compute variance: sum of squared differences from the mean, divided by (count - 1)
+    variance = torch.nansum((tensor - mean) ** 2, dim=dim, keepdim=True) / (
+        count - 1
+    ).clamp(min=1)
+
+    # Standard deviation is the square root of variance
+    std = torch.sqrt(variance)
+
+    if not keepdim:
+        std = std.squeeze(dim=dim)
+        count = count.squeeze(dim=dim)
+
+    # replace the place where the whole dim are nans
+    std[count == 0] = torch.nan
+
+    return std
+
+
+def nanvar(tensor: torch.Tensor, dim: int, keepdim: bool = False):
+    """Compute the standard deviation manually while ignoring NaNs."""
+    # Mask NaN values
+    valid_mask = ~torch.isnan(tensor)
+    count = valid_mask.sum(dim=dim, keepdim=True).float()
+
+    # Compute the mean, while ignoring NaNs (ensure broadcasting along the correct dimension)
+    mean = torch.nansum(tensor, dim=dim, keepdim=True) / count.clamp(min=1)
+
+    # Compute variance: sum of squared differences from the mean, divided by (count - 1)
+    variance = torch.nansum((tensor - mean) ** 2, dim=dim, keepdim=True) / count.clamp(
+        min=1
+    )
+
+    if not keepdim:
+        variance = variance.squeeze(dim=dim)
+        count = count.squeeze(dim=dim)
+
+    # replace the place where the whole dim are nans
+    variance[count == 0] = torch.nan
+
+    return variance

@@ -23,6 +23,9 @@ class Features(IntEnum):
     TRADES = 6
     TAKERBUYVOLUME = 7
     TAKERBUYAMOUNT = 8
+    vol_ret_min = 9
+    imbalanceHF_disagreement_min = 10
+    corr_ptbv_min = 11
 
 
 class StockData:

@@ -6,6 +6,7 @@ from torch import Tensor
 
 from data.stock_data import Features, StockData
 from utils.maybe import Maybe, none, some
+from utils.pytorch_utils import nanstd
 
 _ExprOrFloat = Union["Expression", float]
 _DTimeOrInt = Union["DeltaTime", int]
@@ -585,17 +586,11 @@ class WinsorizeStandardize(UnaryOperator):
     def _apply(self, operand: Tensor) -> Tensor:
         lower_bound = torch.nanquantile(operand, 0.03, dim=-1, keepdim=True)
         upper_bound = torch.nanquantile(operand, 0.97, dim=-1, keepdim=True)
-        # # 缩尾处理
-        w = torch.clamp(operand, lower_bound, upper_bound)
-        mask = torch.isnan(w)
-        n = (~mask).sum(dim=1)
-        w[mask] = 0.0
-        mean = w.sum(dim=1) / n
-        std = ((((w - mean[:, None]) * ~mask) ** 2).sum(dim=1) / n).sqrt()
-        w = (w - mean[:, None]) / std[:, None]
-        w[mask] = torch.nan
-        # 归一
-        return w
+        operand = torch.clamp(operand, lower_bound, upper_bound)
+        mean = operand.nanmean(dim=-1)
+        std = nanstd(operand, dim=-1)
+        operand = (operand - mean) / std
+        return operand
 
 
 class Add(BinaryOperator):
